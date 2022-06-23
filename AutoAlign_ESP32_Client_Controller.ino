@@ -3,9 +3,9 @@
 #include <U8g2lib.h>
 #include <EEPROM.h>
 // #include <EEPROM_Controller.h>
-#include <EEPROM_Control.h>
+// #include <EEPROM_Control.h>
 
-EEPROM_Control EP_C(34);
+// EEPROM_Control EP_C(34);
 
 /* Keyboard Pin Setting */
 const byte R_0 = 12;
@@ -59,6 +59,7 @@ typedef struct struct_receive_msg_UI_Data {
     int _speed_x;
     int _speed_y;
     int _speed_z;
+    int _QT;
 } struct_receive_msg_UI_Data;
 
 // Create a struct_message called BME280Readings to hold sensor readings
@@ -988,6 +989,7 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   }
   else if(Msg == "Core:AQ")
   {
+    Q_Time = incoming_UI_Data._QT;
     isLCD = true;
     PageLevel = 103;
     updateUI(103);
@@ -1029,7 +1031,7 @@ void setup() {
   Serial.setTimeout(50); //設定序列埠接收資料時的最大等待時間
 
   // led.on();
-  EP_C.EE_Begin(512);
+  // EP_C.EE_Begin(512);
 
    //宣告使用EEPROM 512 個位置
   // EEPROM.begin(512);
@@ -1133,7 +1135,7 @@ void loop() {
   // if (result == ESP_OK) {
   //   Serial.println("Sent with success");
   // }
-  delay(50);
+  delay(20);
 
   #pragma region Keyboard Detect
 
