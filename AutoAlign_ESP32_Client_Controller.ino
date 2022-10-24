@@ -2,10 +2,6 @@
 #include <esp_now.h>
 #include <U8g2lib.h>
 #include <EEPROM.h>
-// #include <EEPROM_Controller.h>
-// #include <EEPROM_Control.h>
-
-// EEPROM_Control EP_C(34);
 
 /* Keyboard Pin Setting */
 const byte R_0 = 12;
@@ -27,8 +23,6 @@ double ref_IL = 0;  //PD reference
 
 double Target_IL = 0; //0 dB
 
-
-
 bool btn_isTrigger = false;
 
 int cmd_No = 0;
@@ -37,8 +31,15 @@ int hallVal=1;
 String SSD, Msg;
 String contr_Name = "C001::";
 
-uint8_t broadcastAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x65, 0xFC}; 
-// uint8_t broadcastAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0xD8, 0xD0}; 
+uint8_t CoreAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x4C, 0xF8};   //8C:4B:14:16:4C:F8
+// uint8_t broadcastAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x65, 0xFC}; 
+String ThisAddr = "";
+String Mac_Addr_Core = "";
+String Mac_Addr_Server = "";
+// char* ThisAddress ;
+
+String AQ_Status = "Auto-Curing";
+String IL_value = "0";
 
 typedef struct struct_send_message {
     String contr_name;
@@ -46,10 +47,6 @@ typedef struct struct_send_message {
     char value[20];
     // String value;
 } struct_send_message;
-
-// typedef struct struct_message {
-//     String msg;
-// } struct_message;
 
 typedef struct struct_receive_msg_UI_Data {
     String msg;
@@ -60,13 +57,11 @@ typedef struct struct_receive_msg_UI_Data {
     int _speed_y;
     int _speed_z;
     int _QT;
+    char para[30];
 } struct_receive_msg_UI_Data;
 
 // Create a struct_message called BME280Readings to hold sensor readings
 struct_send_message sendmsg;
-
-// Create a struct_message to hold incoming sensor readings
-// struct_message incomingReadings;
 
 struct_receive_msg_UI_Data incoming_UI_Data;
 
@@ -97,14 +92,16 @@ bool isLCD_Auto_Update = false;
 char *UI_Items[ITEMS_COUNT] =
     {" "};
 
-#define MENU_ITEMS 6
+#define MENU_ITEMS 7
 char *UI_Menu_Items[MENU_ITEMS] =
     {"1. Status",
      "2. Target IL",
      "3. StableDelay",
      "4. Q Z-offset",
      "5. Speed",
-     "6. Get Ref"};
+     "6. Get Ref",
+     "7. Address"
+     };
 
 #define Speed_Page_ITEMS 4
 char *UI_Speed_Page_Items[MENU_ITEMS] =
@@ -112,6 +109,13 @@ char *UI_Speed_Page_Items[MENU_ITEMS] =
      "2. Y Speed",
      "3. Z Speed",
      "<<"};
+
+#define Addr_Page_ITEMS 4
+char *UI_Addr_Page_Items[MENU_ITEMS] =
+{"1. Controller",
+"2. Core",
+"3. Server",
+"<<"};
 
 uint8_t i, h, w, title_h, H;
 
@@ -131,35 +135,6 @@ int subpage_itemsCount = 1;
 bool item_is_selected = false;
 bool plus_minus = false;
 int pre_LCD_Page_index = 0;
-
-// void Task_1_sendData(void *pvParameters)
-// {
-//   while (true)
-//   {
-//     if (!digitalRead(LCD_Select_pin))
-//     {
-//       LCD_Encoder_Selected();
-//     }
-
-//     int idx = LCD_en_count / 2;
-//     // Serial.println(String(idx));
-//     updateUI(idx);
-
-//     if (isLCD_Auto_Update)
-//       if (millis() - LCD_Auto_Update_TimeCount > 5000)
-//       {
-//         LCD_Auto_Update_TimeCount = millis();
-//         isLCD = true;
-//       }
-
-//     delay(150);
-//     // lcd.clearDisplay();
-//     // delay(150);
-
-//     //Task1休息，delay(1)不可省略
-//     delay(1);
-//   }
-// }
 
 //Full Page method
 void updateUI(int pageIndex)
@@ -181,13 +156,13 @@ void updateUI(int pageIndex)
 
     if(!item_is_selected)
     {
-      // "UI?".toCharArray(sendmsg.cmd, 60);
       DataSent_Core("UI?", "");
       delay(30);
       DataReceive_Core(); //Call ESP-Now receive data function
     }
       
-    if (PageLevel == 0) //Main Page (Menu)
+    /* Main Page (Menu) */
+    if (PageLevel == 0) 
     {
       PageItemsCount = MENU_ITEMS;
 
@@ -215,14 +190,14 @@ void updateUI(int pageIndex)
         lcd.drawTriangle(w / 2 - 2, H - 3, w / 2 + 3, H - 3, w / 2, H); //Draw Triangle
 
       mainpage_SelectedBox_Index = pageIndex;
-
-      // lcd.sendBuffer();
     }
 
     else if (PageLevel == 1)
     {
-      if (mainpage_SelectedBox_Index == 4)
+      if (mainpage_SelectedBox_Index != 5)
       {
+        
+
         Draw_ALL_UI_Items(LCD_Update_Mode, pageIndex);
       }
       else if (mainpage_SelectedBox_Index == 5)  //Get Ref
@@ -257,7 +232,8 @@ void updateUI(int pageIndex)
       }
     }
     
-    else if (PageLevel == 101 || PageLevel == 102) /* Auto-Aligning */
+    /* Auto-Aligning */
+    else if (PageLevel == 101 || PageLevel == 102) 
     {
       lcd.clearBuffer();
 
@@ -275,7 +251,8 @@ void updateUI(int pageIndex)
       lcd.sendBuffer();
     }
 
-    else if (PageLevel == 103) /* Auto-Curing */
+    /* Auto-Curing */
+    else if (PageLevel == 103)
     {
       lcd.clearBuffer();
 
@@ -284,17 +261,25 @@ void updateUI(int pageIndex)
 
       int H = lcd.getHeight();
 
-      int title_w = (w / 2) - (lcd.getStrWidth("Auto-Curing") / 2);
-      lcd.drawStr(title_w, H / 2 - (h / 2), "Auto-Curing");
+      int title_w = (w / 2) - (lcd.getStrWidth(AQ_Status.c_str()) / 2);
+      lcd.drawStr(title_w, H / 2 - (1.1* h), AQ_Status.c_str());  //AQ Status
 
-      lcd.drawBox(0, H / 2 - 1.8 * h, w, 1); //Seperate Line
-      lcd.drawBox(0, H / 2 + 1.8 * h, w, 1); //Seperate Line
+      lcd.drawBox(0, H / 2 - 2.2 * h, w, 1); //Seperate Line
+      lcd.drawBox(0, H / 2 + 2.2 * h, w, 1); //Seperate Line
 
-      String Q_Time_Show = String(Q_Time) + " s";
+      String Q_Time_Show = String(Q_Time) + " s";  
       int Q_Time_w = (w / 2) - (lcd.getStrWidth(Q_Time_Show.c_str()) / 2);
-      lcd.drawStr(Q_Time_w, H / 2 + 0.9 * h, Q_Time_Show.c_str());
+      lcd.drawStr(Q_Time_w, H / 2 + 0.2 * h, Q_Time_Show.c_str());  //Q time
+
+      String IL_Show = String(IL_value) + " / " + String(Target_IL) + " dB";
+
+      int IL_w = (w / 2) - (lcd.getStrWidth(IL_Show.c_str())/ 2);
+
+      lcd.drawStr(IL_w, H / 2 + 1.6 * h, IL_Show.c_str());  //IL / Target IL
 
       lcd.sendBuffer();
+
+      // Serial.println("Target_IL:" + String(Target_IL));
     }
 
     lcd.sendBuffer();
@@ -302,7 +287,8 @@ void updateUI(int pageIndex)
 
     return;
 
-    if (LCD_Update_Mode == 0 && pageIndex != LCD_PageNow) /* Main Page*/
+    /* Main Page*/
+    if (LCD_Update_Mode == 0 && pageIndex != LCD_PageNow) 
     {
       // lcd.begin();
       lcd.clearBuffer();
@@ -346,7 +332,8 @@ void updateUI(int pageIndex)
       lcd.sendBuffer();
     }
 
-    else if (LCD_Update_Mode == 1) /* Auto-Aligning */
+    /* Auto-Aligning */
+    else if (LCD_Update_Mode == 1) 
     {
       // lcd.clearBuffer();
       lcd.clearDisplay();
@@ -366,7 +353,8 @@ void updateUI(int pageIndex)
       lcd.sendBuffer();
     }
 
-    else if (LCD_Update_Mode == 2) /* Auto-Curing */
+    /* Auto-Curing */
+    else if (LCD_Update_Mode == 2) 
     {
       lcd.clearBuffer();
       // lcd.clearDisplay();
@@ -390,7 +378,8 @@ void updateUI(int pageIndex)
       lcd.sendBuffer();
     }
 
-    else if (LCD_Update_Mode == 12) /* Target IL */
+    /* Target IL */
+    else if (LCD_Update_Mode == 12) 
     {
       lcd.clearBuffer();
       // lcd.clearDisplay();
@@ -411,7 +400,8 @@ void updateUI(int pageIndex)
       lcd.sendBuffer();
     }
 
-    else if (LCD_Update_Mode == 14) /* Q Z-offset */
+    /* Q Z-offset */
+    else if (LCD_Update_Mode == 14) 
     {
       lcd.clearBuffer();
       // lcd.clearDisplay();
@@ -432,7 +422,8 @@ void updateUI(int pageIndex)
       lcd.sendBuffer();
     }
 
-    else if (LCD_Update_Mode == 15) /* X Speed */
+    /* X Speed */
+    else if (LCD_Update_Mode == 15) 
     {
       lcd.clearBuffer();
       // lcd.clearDisplay();
@@ -453,7 +444,8 @@ void updateUI(int pageIndex)
       lcd.sendBuffer();
     }
 
-    else if (LCD_Update_Mode == 99) /* Get Ref ? */
+    /* Get Ref ? */
+    else if (LCD_Update_Mode == 99) 
     {
       lcd.clearBuffer();
 
@@ -551,7 +543,9 @@ void updateUI(int pageIndex)
 void Draw_ALL_UI_Items(int LCD_Update_Mode, int pageIndex)
 {
   //Draw each item in UI_Menu_Items
-  if (PageLevel == 1 && mainpage_SelectedBox_Index == 4) //Speed mode
+
+  //Speed mode
+  if (PageLevel == 1 && mainpage_SelectedBox_Index == 4) 
   {
     for (i = 0; i < Speed_Page_ITEMS; i++)
     {
@@ -601,6 +595,34 @@ void Draw_ALL_UI_Items(int LCD_Update_Mode, int pageIndex)
       {
         lcd.drawFrame(0, (subpage_SelectedBox_Index)*h + 1 + title_h, w, h + 1); //Un-Selected Box
       }
+    }
+  }
+  else if (PageLevel == 1 && mainpage_SelectedBox_Index == 6) 
+  {
+    for (i = 0; i < Addr_Page_ITEMS; i++)
+    {
+      lcd.drawStr(3, title_h + ((i + 1) * h) - 1, UI_Addr_Page_Items[i]);
+
+      //Item Content
+      // switch (i)
+      // {
+      // case 0:
+      //   lcd.drawStr(lcd.getWidth() - lcd.getStrWidth("0000") - 2, title_h + ((i + 1) * h) - 1, String(delayBetweenStep_X).c_str());
+      //   break;
+
+      // case 1:
+      //   lcd.drawStr(lcd.getWidth() - lcd.getStrWidth("0000") - 2, title_h + ((i + 1) * h) - 1, String(delayBetweenStep_Y).c_str());
+      //   break;
+
+      // case 2:
+      //   lcd.drawStr(lcd.getWidth() - lcd.getStrWidth("0000") - 2, title_h + ((i + 1) * h) - 1, String(delayBetweenStep_Z).c_str());
+      //   break;
+
+      // default:
+      //   break;
+      // }
+
+      lcd.drawFrame(0, (subpage_SelectedBox_Index)*h + 1 + title_h, w, h + 1); //Un-Selected Box
     }
   }
   else //Main Page (Menu) Items
@@ -669,8 +691,10 @@ void LCD_Encoder_Rise()
 
   if (LCD_Encoder_State != LCD_Encoder_LastState)
   {
+    //index ++
     if (digitalRead(LCD_Encoder_B_pin) != LCD_Encoder_State)
     {
+      //主頁面，項目已被選取
       if (PageLevel == 0 && item_is_selected)
       {
         if (mainpage_SelectedBox_Index == 1)
@@ -682,9 +706,18 @@ void LCD_Encoder_Rise()
           AQ_Scan_Compensation_Steps_Z_A += 1;
         }
       }
+
+      //主頁面，項目未被選取
+      else if (PageLevel == 0 && !item_is_selected)
+      {
+        is_update_LCD_en_count = true;
+        LCD_en_count++;
+      }
+
+      //第一層
       else if (PageLevel == 1)
       {
-        if (mainpage_SelectedBox_Index == 4)  //Speed Setting Page
+        if (mainpage_SelectedBox_Index != 5)  //Speed Setting Page
         {
           if (!item_is_selected)
           {
@@ -708,15 +741,12 @@ void LCD_Encoder_Rise()
           ui_YesNo_Selection = false;
         }
       }
-
-      if (PageLevel == 0 && !item_is_selected)
-      {
-        is_update_LCD_en_count = true;
-        LCD_en_count++;
-      }
     }
+    
+    //index -- 
     else
     {
+      //主頁面，項目已被選取
       if (PageLevel == 0 && item_is_selected)
       {
         if (mainpage_SelectedBox_Index == 1)
@@ -728,25 +758,43 @@ void LCD_Encoder_Rise()
           AQ_Scan_Compensation_Steps_Z_A -= 1;
         }
       }
+      
+       //主頁面，項目未被選取
+      else if (PageLevel == 0 && !item_is_selected)
+      {
+        is_update_LCD_en_count = true;
+        LCD_en_count--;
+      }
+      
+       //第一層
       else if (PageLevel == 1)
       {
-        if (mainpage_SelectedBox_Index == 4)
+        if (mainpage_SelectedBox_Index != 5)
         {
+          //項目未被選取
           if (!item_is_selected)
           {
-            if (subpage_SelectedBox_Index > 0){
-              LCD_sub_count-=1;
+            //確保index >= 0
+            if (subpage_SelectedBox_Index > 0)
+            {
+              LCD_sub_count -= 1;
               subpage_SelectedBox_Index -= 1;
             }
           }
+
+          //項目已被選取
           else
           {
-            if (subpage_SelectedBox_Index == 0)
-              delayBetweenStep_X -= 1;
-            else if (subpage_SelectedBox_Index == 1)
-              delayBetweenStep_Y -= 1;
-            else if (subpage_SelectedBox_Index == 2)
-              delayBetweenStep_Z -= 1;
+            //speed mode page
+            if (mainpage_SelectedBox_Index == 4)
+            {
+              if (subpage_SelectedBox_Index == 0)
+                delayBetweenStep_X -= 1;
+              else if (subpage_SelectedBox_Index == 1)
+                delayBetweenStep_Y -= 1;
+              else if (subpage_SelectedBox_Index == 2)
+                delayBetweenStep_Z -= 1;
+            }
           }
         }
         else if (mainpage_SelectedBox_Index == 5)
@@ -754,29 +802,27 @@ void LCD_Encoder_Rise()
           ui_YesNo_Selection = true;
         }
       }
-
-      if (PageLevel == 0 && !item_is_selected)
-      {
-        is_update_LCD_en_count = true;
-        LCD_en_count--;
-      }
     }
   }
   LCD_Encoder_LastState = LCD_Encoder_State;
 
   idx = LCD_en_count / 2;
 
-  if (PageLevel == 1)
+  //第二層頁面以下
+  if (PageLevel > 0)
   {
-    if (mainpage_SelectedBox_Index == 4)
+    //speed page
+    if (mainpage_SelectedBox_Index != 5)
     {
       if (!item_is_selected)
         subpage_SelectedBox_Index = LCD_sub_count / 2;
 
-        if(subpage_SelectedBox_Index > 3){
-          subpage_SelectedBox_Index = 3;
-          LCD_sub_count = 6;
-        }
+      //Index大於item數時，Index = item.length
+      if(subpage_SelectedBox_Index > subpage_itemsCount - 1)
+      {
+        subpage_SelectedBox_Index = subpage_itemsCount - 1;
+        LCD_sub_count = 6;
+      }
     }
   }
 
@@ -800,19 +846,19 @@ void LCD_Encoder_Selected()
 
       if (!item_is_selected)
       {
+        pre_LCD_Page_index = mainpage_SelectedBox_Index;
+
         switch (mainpage_SelectedBox_Index)
         {
         case 1: /* Into Target IL Mode*/
           LCD_Update_Mode = 12;
           item_is_selected = true;
           isLCD = true;
-          pre_LCD_Page_index = mainpage_SelectedBox_Index;
           break;
         case 3: /* Into Q Z-offset Mode*/
           LCD_Update_Mode = 14;
           item_is_selected = true;
           isLCD = true;
-          pre_LCD_Page_index = mainpage_SelectedBox_Index;
           break;
 
         case 4: /* Into Speed Mode*/
@@ -821,23 +867,36 @@ void LCD_Encoder_Selected()
           PageLevel = 1;
           subpage_itemsCount = Speed_Page_ITEMS;
           subpage_SelectedBox_Index = 0;
-          pre_LCD_Page_index = mainpage_SelectedBox_Index;
           break;
 
         case 5: /* Into Get Ref Mode*/
           LCD_Update_Mode = 99;
           isLCD = true;
           PageLevel = 1;
-          pre_LCD_Page_index = mainpage_SelectedBox_Index;
+          break;
+
+        case 6: /* Into Addr Mode*/
+          LCD_Update_Mode = 101;
+          isLCD = true;
+          PageLevel = 1;
+          subpage_itemsCount = Addr_Page_ITEMS;
+          subpage_SelectedBox_Index = 0;
+
+          DataSent_Core("MAC:Server?", "");
+          delay(30);
+          DataReceive_Core(); //Call ESP-Now receive data function
+
+          delay(150);
+
           break;
 
         // case 99:
         //   if (ui_YesNo_Selection)
         //     cmd_No = 19; //Get Ref
 
-          LCD_Update_Mode = 0;
-          isLCD = true;
-          break;
+          // LCD_Update_Mode = 0;
+          // isLCD = true;
+          // break;
 
         default:
           break;
@@ -873,52 +932,7 @@ void LCD_Encoder_Selected()
     //第二層頁面
     else if (PageLevel == 1)
     {
-      if (mainpage_SelectedBox_Index == 4) // speed mode
-      {
-        if (subpage_SelectedBox_Index != 3)
-        {
-          // sendmsg.cmd = "UI_Data";
-          // sendmsg.value = "UI_Data";
-          // sendmsg_UI_Data._Target_IL = Target_IL;
-          // sendmsg_UI_Data._ref_Dac = ref_Dac;
-          // sendmsg_UI_Data._Q_Z_offset = AQ_Scan_Compensation_Steps_Z_A;
-          // sendmsg_UI_Data._speed_x = delayBetweenStep_X;
-          // sendmsg_UI_Data._speed_y = delayBetweenStep_Y;
-          // sendmsg_UI_Data._speed_z = delayBetweenStep_Z;
-          // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg_UI_Data, sizeof(sendmsg_UI_Data));
-
-          if (item_is_selected)
-          {
-            switch (subpage_SelectedBox_Index)
-            {
-            case 0:
-              DataSent_Core("UI_Data_speed_x", String(delayBetweenStep_X));
-              break;
-
-            case 1:
-              DataSent_Core("UI_Data_speed_y", String(delayBetweenStep_Y));
-              break;
-
-            case 2:
-              DataSent_Core("UI_Data_speed_z", String(delayBetweenStep_Z));
-              break;
-
-            default:
-              break;
-            }
-          }
-
-          item_is_selected = !item_is_selected;
-        }
-        else
-        {
-          item_is_selected = false;
-          PageLevel = 0;
-        }
-        isLCD = true;
-      }
-
-      else if (mainpage_SelectedBox_Index == 5) //get ref mode
+      if (mainpage_SelectedBox_Index == 5) //get ref mode
       {
         PageLevel = 0;
 
@@ -941,6 +955,104 @@ void LCD_Encoder_Selected()
         // updateUI(5);
       }
     
+      else
+      {
+        // speed mode
+        if (mainpage_SelectedBox_Index == 4)
+        {
+          if (subpage_SelectedBox_Index != subpage_itemsCount - 1)
+          {
+            // sendmsg.cmd = "UI_Data";
+            // sendmsg.value = "UI_Data";
+            // sendmsg_UI_Data._Target_IL = Target_IL;
+            // sendmsg_UI_Data._ref_Dac = ref_Dac;
+            // sendmsg_UI_Data._Q_Z_offset = AQ_Scan_Compensation_Steps_Z_A;
+            // sendmsg_UI_Data._speed_x = delayBetweenStep_X;
+            // sendmsg_UI_Data._speed_y = delayBetweenStep_Y;
+            // sendmsg_UI_Data._speed_z = delayBetweenStep_Z;
+            // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg_UI_Data, sizeof(sendmsg_UI_Data));
+
+            if (item_is_selected)
+            {
+              switch (subpage_SelectedBox_Index)
+              {
+              case 0:
+                DataSent_Core("UI_Data_speed_x", String(delayBetweenStep_X));
+                break;
+
+              case 1:
+                DataSent_Core("UI_Data_speed_y", String(delayBetweenStep_Y));
+                break;
+
+              case 2:
+                DataSent_Core("UI_Data_speed_z", String(delayBetweenStep_Z));
+                break;
+
+              default:
+                break;
+              }
+            }
+
+            item_is_selected = !item_is_selected;
+          }
+        }
+
+        // Addr mode
+        else if (mainpage_SelectedBox_Index == 6)
+        {
+          if (subpage_SelectedBox_Index != subpage_itemsCount - 1)
+          {
+            //Show mac address of the selected item
+            switch (subpage_SelectedBox_Index)
+              {
+                //Controller
+              case 0:
+                if (!item_is_selected)
+                  UI_Addr_Page_Items[subpage_SelectedBox_Index] = const_cast<char*>(ThisAddr.c_str()); 
+                else
+                  UI_Addr_Page_Items[subpage_SelectedBox_Index] = "1. Controller";
+                break;
+
+              case 1:
+                if (!item_is_selected)
+                  UI_Addr_Page_Items[subpage_SelectedBox_Index] = const_cast<char*>(Mac_Addr_Core.c_str()); 
+                else
+                  UI_Addr_Page_Items[subpage_SelectedBox_Index] = "2. Core";
+                break;
+
+              case 2:
+                if (!item_is_selected)
+                {
+                  if(Mac_Addr_Server == "")
+                  {
+                    DataSent_Core("MAC:Server?", "");
+                    delay(100);  //wait for message transfer
+                    DataReceive_Core(); //Call ESP-Now receive data function
+                    delay(100);
+                  }
+                  UI_Addr_Page_Items[subpage_SelectedBox_Index] = const_cast<char*>(Mac_Addr_Server.c_str()); 
+                }
+                else
+                  UI_Addr_Page_Items[subpage_SelectedBox_Index] = "3. Server";
+                break;
+
+              default:
+                break;
+              }
+
+              item_is_selected = !item_is_selected;
+          }
+        }
+
+        //back to main page
+        if(subpage_SelectedBox_Index >= subpage_itemsCount - 1)
+        {
+          item_is_selected = false;
+          PageLevel = 0;
+        }
+        isLCD = true;
+      }
+
     }
 
     btn_isTrigger = false;
@@ -949,34 +1061,20 @@ void LCD_Encoder_Selected()
   }
 }
 
-
-
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  // char macStr[18];
-  // Serial.print("Packet to: ");
-  // snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-  //          mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-  // Serial.println(macStr);
-  // Serial.print("Send status: ");
-  // Serial.println(status == ESP_NOW_SEND_SUCCESS ? SSD ="Delivery Success" : SSD ="Delivery Fail");
   status == ESP_NOW_SEND_SUCCESS ? SSD ="Delivery Success" : SSD ="Delivery Fail";
   //
   if(status == 0)
   {
-    // Serial.println("OK");
-    hallVal= hallVal + 1; // 如果通道成功傳輸後才+1,失敗的話就會繼續傳上一筆的資料
-    // Serial.println(contr_Name + String(hallVal));
+    // hallVal= hallVal + 1; // 如果通道成功傳輸後才+1,失敗的話就會繼續傳上一筆的資料
   }
-  //
-  // Serial.println();
 }
 
 // Callback when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   memcpy(&incoming_UI_Data, incomingData, sizeof(incoming_UI_Data));
-  // Serial.print("Bytes received: ");
-  // Serial.println(len);
+  
   Msg = incoming_UI_Data.msg;
   Msg.trim();
   Serial.println("Incoming:" + Msg);
@@ -989,11 +1087,23 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   }
   else if(Msg == "Core:AQ")
   {
+    AQ_Status = "Auto-Curing : Idle";
+    Target_IL = incoming_UI_Data._Target_IL;
     Q_Time = incoming_UI_Data._QT;
+    IL_value = incoming_UI_Data.para;
     isLCD = true;
     PageLevel = 103;
     updateUI(103);
   }
+
+  else if(Msg == "Core:Scan")
+  {
+    AQ_Status = "Auto-Curing : Scan";
+    isLCD = true;
+    PageLevel = 103;
+    updateUI(103);
+  }
+
   else if(Msg == "Core:Menu")
   {
     Target_IL = incoming_UI_Data._Target_IL;
@@ -1009,7 +1119,6 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
   }
   else if(Msg == "Core:UI?")
   {
-    //  Serial.println("Target_IL:" + String(incoming_UI_Data._Target_IL));
     Target_IL = incoming_UI_Data._Target_IL;
     ref_Dac = incoming_UI_Data._ref_Dac;
     AQ_Scan_Compensation_Steps_Z_A = incoming_UI_Data._Q_Z_offset;
@@ -1017,32 +1126,26 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
     delayBetweenStep_Y = incoming_UI_Data._speed_y;
     delayBetweenStep_Z = incoming_UI_Data._speed_z;
   }
-  // Serial.println("MSG:" + Msg);
-  // Serial.println("Target_IL:" + String(Target_IL));
-  // Serial.println("ref_Dac:" + String(ref_Dac));
-  // Serial.println("Q_Z_offset:" + String(AQ_Scan_Compensation_Steps_Z_A));
-  // Serial.println("delayBetweenStep_X:" + String(delayBetweenStep_X));
-  // Serial.println("delayBetweenStep_Y:" + String(delayBetweenStep_Y));
-  // Serial.println("delayBetweenStep_Z:" + String(delayBetweenStep_Z));
+
+  else if(Msg == "MAC:Core")
+  {
+    String Msg_Value;
+    Msg_Value = incoming_UI_Data.para;
+    Serial.println("Mac Core:" + Msg_Value);
+    Mac_Addr_Core = Msg_Value; 
+  }
+  else if(Msg == "MAC:Server")
+  {
+    String Msg_Value;
+    Msg_Value = incoming_UI_Data.para;
+    Serial.println("Mac Server:" + Msg_Value);
+    Mac_Addr_Server = Msg_Value;
+  }
 }
 
 void setup() {
   Serial.begin(115200);
   Serial.setTimeout(50); //設定序列埠接收資料時的最大等待時間
-
-  // led.on();
-  // EP_C.EE_Begin(512);
-
-   //宣告使用EEPROM 512 個位置
-  // EEPROM.begin(512);
-
-  // EEP.EE_Begin(512);
-  //  EE_Begin(512);
-  // CleanEEPROM(504, 8);
-
-  // WiFi.mode(WIFI_MODE_STA);  // Set device as a Wi-Fi Station
-  // Serial.print("ESP32 Board MAC Address:  ");
-  // Serial.println(WiFi.macAddress());  //取得本機的MACAddress
 
   // Init ESP-NOW
   WiFi.mode(WIFI_STA);
@@ -1053,6 +1156,43 @@ void setup() {
   else
     Serial.println("Initializing ESP-NOW");
 
+  ThisAddr = WiFi.macAddress();
+  Serial.print("ESP32 Board MAC Address:  ");
+  Serial.println(ThisAddr);  //取得本機的MACAddress
+
+
+  #pragma region Show string of address in uint-array type
+
+  // String addr = "";
+  // Serial.print("Test Address:  ");
+  // for (size_t i = 0; i < sizeof(TestAddress); i++)
+  // {
+  //   String adr = String(TestAddress[i], HEX);
+  //   adr.toUpperCase();
+  //   addr += adr;
+  //   if(i < sizeof(TestAddress) - 1)
+  //     addr += ":"; 
+  // }
+  // Serial.println(addr);  
+
+  #pragma endregion 
+
+   #pragma region Hex to string
+
+      Mac_Addr_Core = "";
+      
+      for (size_t i = 0; i < sizeof(CoreAddress); i++)
+      {
+        String adr = String(CoreAddress[i], HEX);
+        adr.toUpperCase();
+        Mac_Addr_Core += adr;
+        if(i < sizeof(CoreAddress) - 1)
+          Mac_Addr_Core += ":";  
+      }
+
+    #pragma endregion 
+  
+
   // 設置發送數據回傳函數
   // Once ESPNow is successfully Init, we will register for Send CB to
   // get the status of Trasnmitted packet
@@ -1060,7 +1200,8 @@ void setup() {
 
   // 绑定數據接收端
   esp_now_peer_info_t peerInfo;
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6); // Register peer
+  memset(&peerInfo, 0, sizeof(peerInfo));  //initialize peer if esp32 library version is 2.0.1 (no need in version 1.0.6)
+  memcpy(peerInfo.peer_addr, CoreAddress, 6); // Register peer
   peerInfo.channel = 0;
   peerInfo.encrypt = false;
 
@@ -1111,31 +1252,18 @@ void setup() {
 }
 
 void loop() {
+ 
+  delay(20);  //default:20
 
-  // String rsMsg = "";
-  // if (Serial.available())
-  //   rsMsg = Serial.readString();
-  
-  // Send message via ESP-NOW
-  // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &mes, sizeof(mes));
-  // if(rsMsg!="")
+  // Serial.print("Test Address:  ");
+  // for (size_t i = 0; i < sizeof(TestAddress); i++)
   // {
-  //   rsMsg.trim();
-  //   // Serial.println(contr_Name + String(rsMsg));
-  //   // Set values to send
-  //   sendmsg.contr_name = contr_Name;
-  //   sendmsg.cmd = rsMsg;
-  //   sendmsg.value = "";
+  //   Serial.print(TestAddress[i], HEX);  
 
-  //   Serial.println(sendmsg.contr_name + sendmsg.cmd);
-
-  //   esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
+  //   if(i!=sizeof(TestAddress) - 1)
+  //     Serial.print(":");
   // }
-
-  // if (result == ESP_OK) {
-  //   Serial.println("Sent with success");
-  // }
-  delay(20);
+  //  Serial.println("");
 
   #pragma region Keyboard Detect
 
@@ -1155,7 +1283,6 @@ void loop() {
       if (!digitalRead(LCD_Select_pin))
       {
         LCD_Encoder_Selected();
-        // return;
       }
 
       //Update UI
@@ -1201,7 +1328,6 @@ void loop() {
         isLCD = false;
       }
     }
- 
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -1213,10 +1339,6 @@ void EmergencyStop()
   Serial.println("EmergencyStop");
 
   DataSent_Core("BS", "0");
-
-  // sendmsg.cmd = "BS";
-  // sendmsg.value = String(0);
-  // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -1342,27 +1464,8 @@ int Function_Classification(String cmd, int ButtonSelected)
   //Keyboard - Motor Control
   if (ButtonSelected >= 0)
   {
-    
     //Keyboard No. to Cmd Set No.
     cmd_No = ButtonSelected;
-    // switch (ButtonSelected)
-    // {
-    // case 7:
-    //   cmd_No = 1;
-    //   break;
-
-    // case 8:
-    //   cmd_No = 2;
-    //   break;
-
-    // case 9:
-    //   cmd_No = 3;
-    //   break;
-
-    // default:
-    //   cmd_No = ButtonSelected;
-    //   break;
-    // }
   }
 
   return cmd_No;
@@ -1373,14 +1476,12 @@ int Function_Classification(String cmd, int ButtonSelected)
 int Function_Excecutation(String cmd, int cmd_No)
 {
   //Function Execution
-  // String cmd = "";
-  
    
   if(cmd_No >= 0)
   {
     if (cmd_No != 0)
     {
-      // Serial.println("Btn:" + String(ButtonSelected) + ", CMD:" + String(cmd_No));
+      // Serial.println("CMD:" + String(cmd_No));
 
       //Functions: Alignment
       if (cmd_No <= 100)
@@ -1401,17 +1502,10 @@ int Function_Excecutation(String cmd, int cmd_No)
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
-            // sendmsg.cmd = "BS";
-            // sendmsg.value = String(cmd_No);
-            // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
-            // Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
             if (digitalRead(R_3))
             {
               DataSent_Core("SS", "");
-              // sendmsg.cmd = "SS";
-              // sendmsg.value = "";
-              // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
               break;
             }    
@@ -1423,18 +1517,11 @@ int Function_Excecutation(String cmd, int cmd_No)
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
-            // sendmsg.cmd = "BS";
-            // sendmsg.value = String(cmd_No);
-            // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
             if (digitalRead(R_3))
             {
               DataSent_Core("SS", "");
-              // sendmsg.cmd = "SS";
-              // sendmsg.value = "";
 
               Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
-
-              // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
               break;
             }    
             delay(50);  //Delay時間太短會導倒core收不到停止指令
@@ -1447,18 +1534,13 @@ int Function_Excecutation(String cmd, int cmd_No)
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
-            // sendmsg.cmd = "BS";
-            // sendmsg.value = String(cmd_No);
-            // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
+           
           if (digitalRead(R_3))
           {
             DataSent_Core("SS", "");
-              // sendmsg.cmd = "SS";
-              // sendmsg.value = "";
 
               Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
 
-              // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
               break;
             }    
             delay(50);  //Delay時間太短會導倒core收不到停止指令
@@ -1470,18 +1552,13 @@ int Function_Excecutation(String cmd, int cmd_No)
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
-            // sendmsg.cmd = "BS";
-            // sendmsg.value = String(cmd_No);
-            // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
+           
             if (digitalRead(R_2))
             {
               DataSent_Core("SS", "");
-            // sendmsg.cmd = "SS";
-            //   sendmsg.value = "";
 
               Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
 
-              // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
               break;
             }    
             delay(50);  //Delay時間太短會導倒core收不到停止指令
@@ -1495,18 +1572,12 @@ int Function_Excecutation(String cmd, int cmd_No)
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
-            // sendmsg.cmd = "BS";
-            // sendmsg.value = String(cmd_No);
-            // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
             if (digitalRead(R_2))
             {
               DataSent_Core("SS", "");
-              // sendmsg.cmd = "SS";
-              // sendmsg.value = "";
 
               Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
 
-              // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
               break;
             }    
             delay(50);  //Delay時間太短會導倒core收不到停止指令
@@ -1520,34 +1591,18 @@ int Function_Excecutation(String cmd, int cmd_No)
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
-            // sendmsg.cmd = "BS";
-            // sendmsg.value = String(cmd_No);
-            // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
             if (digitalRead(R_2))
             {
               DataSent_Core("SS", "");
-              // sendmsg.cmd = "SS";
-              // sendmsg.value = "";
 
               Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
 
-              // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
               break;
             }    
             delay(50);  //Delay時間太短會導倒core收不到停止指令
           }
           cmd_No = 0;
           break;
-
-        //EmergencyStop
-        // case 129:
-        //   isStop = true;
-        //   Serial.println("EmergencyStop");
-        //   digitalWrite(Tablet_PD_mode_Trigger_Pin, true); //false is PD mode, true is Servo mode
-        //   isLCD = true;
-        //   PageLevel = 0;
-        //   break;
-      
         }
     }
     else
@@ -1562,11 +1617,11 @@ int Function_Excecutation(String cmd, int cmd_No)
 
 void DataSent_Core(String CMD, String VALUE)
 {
+  Serial.printf("SendCMD:%s\n", CMD.c_str());
   CMD.toCharArray(sendmsg.cmd, 30);
   VALUE.toCharArray(sendmsg.value, 20);
-  // sendmsg.value = VALUE;
-  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
-  // Serial.println(CMD + ", " + VALUE);
+  esp_err_t result = esp_now_send(CoreAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
+  // Serial.printf("SendResult:%d\r\n", result);
 }
 
 void DataReceive_Core()
@@ -1580,4 +1635,12 @@ void DataReceive_Core()
 void MSGOutput(String msg)
 {
   Serial.println(msg);
+}
+
+bool Contains(String text, String search)
+{
+  if (text.indexOf(search) == -1)
+    return false;
+  else
+    return true;
 }
