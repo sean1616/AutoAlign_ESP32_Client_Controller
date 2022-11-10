@@ -31,7 +31,7 @@ int hallVal=1;
 String SSD, Msg;
 String contr_Name = "C001::";
 
-uint8_t CoreAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x4C, 0xF8};   //8C:4B:14:16:4C:F8
+uint8_t CoreAddress[] = {0x90, 0x38, 0x0C, 0xEA, 0xD4, 0xC0};   //8C:4B:14:16:4C:F8
 // uint8_t broadcastAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x65, 0xFC}; 
 String ThisAddr = "";
 String Mac_Addr_Core = "";
@@ -75,6 +75,7 @@ bool LCD_Encoder_State = false;
 bool LCD_Encoder_LastState = false;
 int LCD_en_count = 0, idx = 0;
 int LCD_sub_count = 0, idx_sub = 0;
+int LCD_sub_selected_count = 0, idx_sub_selected = 0;
 int current_selection = 0;
 
 unsigned long Q_Time = 0;
@@ -196,8 +197,7 @@ void updateUI(int pageIndex)
     {
       if (mainpage_SelectedBox_Index != 5)
       {
-        
-
+        // Serial.println("Draw UI");
         Draw_ALL_UI_Items(LCD_Update_Mode, pageIndex);
       }
       else if (mainpage_SelectedBox_Index == 5)  //Get Ref
@@ -278,265 +278,12 @@ void updateUI(int pageIndex)
       lcd.drawStr(IL_w, H / 2 + 1.6 * h, IL_Show.c_str());  //IL / Target IL
 
       lcd.sendBuffer();
-
-      // Serial.println("Target_IL:" + String(Target_IL));
     }
 
     lcd.sendBuffer();
     isLCD = false;
 
     return;
-
-    /* Main Page*/
-    if (LCD_Update_Mode == 0 && pageIndex != LCD_PageNow) 
-    {
-      // lcd.begin();
-      lcd.clearBuffer();
-      // lcd.clearDisplay();
-
-      H = lcd.getHeight();
-      h = lcd.getFontAscent() - lcd.getFontDescent() + 2;
-      w = lcd.getWidth();
-      title_h = h + 2;
-
-      int title_w = (w / 2) - (lcd.getStrWidth("Menu") / 2);
-      lcd.drawStr(title_w, h - 1, "Menu");
-
-      lcd.drawBox(0, h + 1, w, 1); //Seperate Line
-
-      int deltaIndex = 0;
-      if (pageIndex > Bottom_Item_Index)
-      {
-        deltaIndex = abs(pageIndex - Bottom_Item_Index);
-        Top_Item_Index = Top_Item_Index + deltaIndex;
-        Bottom_Item_Index = Top_Item_Index + 3;
-      }
-      else if (pageIndex < Top_Item_Index)
-      {
-        deltaIndex = abs(Top_Item_Index - pageIndex);
-        Top_Item_Index = Top_Item_Index - deltaIndex;
-        Bottom_Item_Index = Top_Item_Index + 3;
-      }
-
-      // if (LCD_Update_Mode < 100)
-      //   lcd.drawFrame(0, (pageIndex - Top_Item_Index) * h + 1 + title_h, w, h + 1); //Un-Selected Box
-
-      //Draw each item in UI_Menu_Items
-      Draw_ALL_UI_Items(LCD_Update_Mode, pageIndex);
-
-      if (pageIndex < MENU_ITEMS - 1)
-        lcd.drawTriangle(w / 2 - 2, H - 3, w / 2 + 3, H - 3, w / 2, H);
-
-      LCD_PageNow = pageIndex;
-
-      lcd.sendBuffer();
-    }
-
-    /* Auto-Aligning */
-    else if (LCD_Update_Mode == 1) 
-    {
-      // lcd.clearBuffer();
-      lcd.clearDisplay();
-      // lcd.clearWriteError();
-
-      h = lcd.getFontAscent() - lcd.getFontDescent() + 2;
-      w = lcd.getWidth();
-
-      int H = lcd.getHeight();
-
-      int title_w = (w / 2) - (lcd.getStrWidth("Auto-Aligning") / 2);
-      lcd.drawStr(title_w, H / 2, "Auto-Aligning");
-
-      lcd.drawBox(0, H / 2 - h, w, 1); //Seperate Line
-      lcd.drawBox(0, H / 2 + 5, w, 1); //Seperate Line
-
-      lcd.sendBuffer();
-    }
-
-    /* Auto-Curing */
-    else if (LCD_Update_Mode == 2) 
-    {
-      lcd.clearBuffer();
-      // lcd.clearDisplay();
-      // lcd.clearWriteError();
-
-      h = lcd.getFontAscent() - lcd.getFontDescent() + 2;
-      w = lcd.getWidth();
-
-      int H = lcd.getHeight();
-
-      int title_w = (w / 2) - (lcd.getStrWidth("Auto-Curing") / 2);
-      lcd.drawStr(title_w, H / 2 - (h / 2), "Auto-Curing");
-
-      lcd.drawBox(0, H / 2 - 1.8 * h, w, 1); //Seperate Line
-      lcd.drawBox(0, H / 2 + 1.8 * h, w, 1); //Seperate Line
-
-      String Q_Time_Show = String(Q_Time) + " s";
-      int Q_Time_w = (w / 2) - (lcd.getStrWidth(Q_Time_Show.c_str()) / 2);
-      lcd.drawStr(Q_Time_w, H / 2 + 0.9 * h, Q_Time_Show.c_str());
-
-      lcd.sendBuffer();
-    }
-
-    /* Target IL */
-    else if (LCD_Update_Mode == 12) 
-    {
-      lcd.clearBuffer();
-      // lcd.clearDisplay();
-
-      int title_w = (w / 2) - (lcd.getStrWidth("Menu") / 2);
-      lcd.drawStr(title_w, h - 1, "Menu");
-
-      lcd.drawBox(0, h + 1, w, 1); //Seperate Line
-
-      //Draw each item in UI_Menu_Items
-      Draw_ALL_UI_Items(LCD_Update_Mode, pageIndex);
-
-      if (pageIndex < MENU_ITEMS - 1)
-        lcd.drawTriangle(w / 2 - 2, H - 3, w / 2 + 3, H - 3, w / 2, H);
-
-      LCD_PageNow = LCD_Update_Mode;
-
-      lcd.sendBuffer();
-    }
-
-    /* Q Z-offset */
-    else if (LCD_Update_Mode == 14) 
-    {
-      lcd.clearBuffer();
-      // lcd.clearDisplay();
-
-      int title_w = (w / 2) - (lcd.getStrWidth("Menu") / 2);
-      lcd.drawStr(title_w, h - 1, "Menu");
-
-      lcd.drawBox(0, h + 1, w, 1); //Seperate Line
-
-      //Draw each item in UI_Menu_Items
-      Draw_ALL_UI_Items(LCD_Update_Mode, pageIndex);
-
-      if (pageIndex < MENU_ITEMS - 1)
-        lcd.drawTriangle(w / 2 - 2, H - 3, w / 2 + 3, H - 3, w / 2, H);
-
-      LCD_PageNow = LCD_Update_Mode;
-
-      lcd.sendBuffer();
-    }
-
-    /* X Speed */
-    else if (LCD_Update_Mode == 15) 
-    {
-      lcd.clearBuffer();
-      // lcd.clearDisplay();
-
-      int title_w = (w / 2) - (lcd.getStrWidth("Menu") / 2);
-      lcd.drawStr(title_w, h - 1, "Menu");
-
-      lcd.drawBox(0, h + 1, w, 1); //Seperate Line
-
-      //Draw each item in UI_Menu_Items
-      Draw_ALL_UI_Items(LCD_Update_Mode, pageIndex);
-
-      if (pageIndex < MENU_ITEMS - 1)
-        lcd.drawTriangle(w / 2 - 2, H - 3, w / 2 + 3, H - 3, w / 2, H);
-
-      LCD_PageNow = LCD_Update_Mode;
-
-      lcd.sendBuffer();
-    }
-
-    /* Get Ref ? */
-    else if (LCD_Update_Mode == 99) 
-    {
-      lcd.clearBuffer();
-
-      h = lcd.getFontAscent() - lcd.getFontDescent() + 2;
-      w = lcd.getWidth();
-
-      int H = lcd.getHeight();
-
-      int title_w = (w / 2) - (lcd.getStrWidth("Get Ref ?") / 2);
-      lcd.drawStr(title_w, H / 2 - (h / 2), "Get Ref ?");
-
-      lcd.drawBox(0, H / 2 - 1.8 * h, w, 1); //Seperate Line
-      lcd.drawBox(0, H / 2 + 1.8 * h, w, 1); //Seperate Line
-
-      int location_X_Yes = (w / 2) - 7 - lcd.getStrWidth("Yes");
-      int location_X_No = (w / 2) + 7;
-      int location_Y = H / 2 + 0.9 * h;
-
-      lcd.drawStr(location_X_Yes, location_Y, "Yes");
-      lcd.drawStr(location_X_No, location_Y, "No");
-
-      //Draw Selection box
-      if (ui_YesNo_Selection)
-        lcd.drawFrame(location_X_Yes - 2, location_Y - h + 1, lcd.getStrWidth("Yes") + 4, h + 2);
-      else
-        lcd.drawFrame(location_X_No - 2, location_Y - h + 1, lcd.getStrWidth("No") + 4, h + 2);
-
-      LCD_PageNow = LCD_Update_Mode;
-
-      lcd.sendBuffer();
-    }
-
-    else if (LCD_Update_Mode == 100) /*  */
-    {
-      // lcd.initDisplay();
-
-      // delay(100);
-
-      // lcd.begin();
-      // lcd.clearBuffer();
-      lcd.clearDisplay();
-      // lcd.clearWriteError();
-      delay(200);
-
-      H = lcd.getHeight();
-      h = lcd.getFontAscent() - lcd.getFontDescent() + 2;
-      w = lcd.getWidth();
-      title_h = h + 2;
-
-      // lcd.setCursor(3, h);
-      // lcd.print("Menu");
-      int title_w = (w / 2) - (lcd.getStrWidth("Menu") / 2);
-      lcd.drawStr(title_w, h - 1, "Menu");
-
-      lcd.drawBox(0, h + 1, w, 1); //Seperate Line
-
-      int start_i = 0; //start_i<=2
-      if (pageIndex == 4)
-        start_i = 1;
-      else if (pageIndex == 5)
-        start_i = 2;
-
-      lcd.drawFrame(0, (pageIndex - start_i) * h + 1 + title_h, w, h + 1); //Select Box
-
-      //Draw each item in UI_Menu_Items
-      for (i = start_i; i < start_i + 4; i++)
-      {
-        lcd.drawStr(3, title_h + ((i + 1 - start_i) * h) - 1, UI_Menu_Items[i]);
-
-        switch (i)
-        {
-        case 1:
-          lcd.drawStr(lcd.getWidth() - lcd.getStrWidth("-00.0") - 2, title_h + ((i + 1 - start_i) * h) - 1, String(Target_IL).c_str());
-          break;
-
-        default:
-          break;
-        }
-      }
-
-      if (pageIndex < MENU_ITEMS - 1)
-        lcd.drawTriangle(w / 2 - 2, H - 3, w / 2 + 3, H - 3, w / 2, H);
-
-      LCD_PageNow = pageIndex;
-
-      lcd.sendBuffer();
-    }
-
-    isLCD = false;
-
-    // LCD_en_count =
   }
 }
 
@@ -721,19 +468,34 @@ void LCD_Encoder_Rise()
         {
           if (!item_is_selected)
           {
-            if (subpage_SelectedBox_Index < (subpage_itemsCount - 1) * 2){
+            if (subpage_SelectedBox_Index < (subpage_itemsCount - 1) * 2)
+            {
               LCD_sub_count +=1;
               subpage_SelectedBox_Index += 1;
             }
           }
+          //update speed
           else
           {
+            LCD_sub_selected_count ++;
+            idx_sub_selected = LCD_sub_selected_count / 2;
+
             if (subpage_SelectedBox_Index == 0)
-              delayBetweenStep_X += 1;
+            {
+              delayBetweenStep_X = idx_sub_selected;
+            }
             else if (subpage_SelectedBox_Index == 1)
-              delayBetweenStep_Y += 1;
+            {
+              delayBetweenStep_Y = idx_sub_selected;
+            }
             else if (subpage_SelectedBox_Index == 2)
-              delayBetweenStep_Z += 1;
+            {
+              delayBetweenStep_Z = idx_sub_selected;
+            }
+
+            Serial.println("LCD_sub_selected_count:" + String(LCD_sub_selected_count));
+            Serial.println("idx_sub_selected:" + String(idx_sub_selected));
+            Serial.println("delayBetweenStep_Y:" + String(delayBetweenStep_Y));
           }
         }
         else if (mainpage_SelectedBox_Index == 5)
@@ -788,12 +550,20 @@ void LCD_Encoder_Rise()
             //speed mode page
             if (mainpage_SelectedBox_Index == 4)
             {
+              LCD_sub_selected_count --;
+
+              LCD_sub_selected_count = (LCD_sub_selected_count < 0) ? 0 : LCD_sub_selected_count;
+
+              idx_sub_selected = LCD_sub_selected_count / 2;
+
               if (subpage_SelectedBox_Index == 0)
-                delayBetweenStep_X -= 1;
+                delayBetweenStep_X = idx_sub_selected;
               else if (subpage_SelectedBox_Index == 1)
-                delayBetweenStep_Y -= 1;
+                delayBetweenStep_Y = idx_sub_selected;
               else if (subpage_SelectedBox_Index == 2)
-                delayBetweenStep_Z -= 1;
+                delayBetweenStep_Z = idx_sub_selected;
+
+              // Serial.println("delayBetweenStep_X:" + String(delayBetweenStep_X));
             }
           }
         }
@@ -835,15 +605,9 @@ void LCD_Encoder_Selected()
   {
     btn_isTrigger = true;
 
-    // Serial.println("PageLevel:" + String(PageLevel) + ", mainpage_SelectedBox_Index:" + String(mainpage_SelectedBox_Index) + ", subpage_SelectedBox_Index:" + String(subpage_SelectedBox_Index));
-    // Serial.println("subpage_SelectedBox_Index:" + String(subpage_SelectedBox_Index) + ", item_is_selected:" + String(item_is_selected));
-      // Serial.println("LCD_Encoder_Selected");
-
     //主頁面(第一層)
     if (PageLevel == 0)
     {
-      // Serial.println("Mainpage_Index:" + String(mainpage_SelectedBox_Index));
-
       if (!item_is_selected)
       {
         pre_LCD_Page_index = mainpage_SelectedBox_Index;
@@ -855,6 +619,7 @@ void LCD_Encoder_Selected()
           item_is_selected = true;
           isLCD = true;
           break;
+
         case 3: /* Into Q Z-offset Mode*/
           LCD_Update_Mode = 14;
           item_is_selected = true;
@@ -887,16 +652,7 @@ void LCD_Encoder_Selected()
           DataReceive_Core(); //Call ESP-Now receive data function
 
           delay(150);
-
           break;
-
-        // case 99:
-        //   if (ui_YesNo_Selection)
-        //     cmd_No = 19; //Get Ref
-
-          // LCD_Update_Mode = 0;
-          // isLCD = true;
-          // break;
 
         default:
           break;
@@ -972,26 +728,49 @@ void LCD_Encoder_Selected()
             // sendmsg_UI_Data._speed_z = delayBetweenStep_Z;
             // esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &sendmsg_UI_Data, sizeof(sendmsg_UI_Data));
 
-            if (item_is_selected)
+            switch (subpage_SelectedBox_Index)
             {
-              switch (subpage_SelectedBox_Index)
-              {
               case 0:
-                DataSent_Core("UI_Data_speed_x", String(delayBetweenStep_X));
+                if (item_is_selected)
+                  DataSent_Core("UI_Data_speed_x", String(delayBetweenStep_X));
+                else
+                {
+                  idx_sub_selected = delayBetweenStep_X;
+                  LCD_sub_selected_count = idx_sub_selected * 2;
+                  // Serial.println("delayBetweenStep_X:" + String(idx_sub_selected));
+                  isLCD = true;
+                }
                 break;
 
               case 1:
-                DataSent_Core("UI_Data_speed_y", String(delayBetweenStep_Y));
+                if (item_is_selected)
+                  DataSent_Core("UI_Data_speed_y", String(delayBetweenStep_Y));
+                else
+                {
+                  idx_sub_selected = delayBetweenStep_Y;
+                  LCD_sub_selected_count = idx_sub_selected * 2;
+                  // Serial.println("delayBetweenStep_Y:" + String(idx_sub_selected));
+                  isLCD = true;
+                }
                 break;
 
               case 2:
-                DataSent_Core("UI_Data_speed_z", String(delayBetweenStep_Z));
+                if (item_is_selected)
+                  DataSent_Core("UI_Data_speed_z", String(delayBetweenStep_Z));
+                else
+                {
+                  idx_sub_selected = delayBetweenStep_Z;
+                  LCD_sub_selected_count = idx_sub_selected * 2;
+                  // Serial.println("delayBetweenStep_Z:" + String(idx_sub_selected));
+                  isLCD = true;
+                }
                 break;
 
               default:
                 break;
-              }
             }
+
+            // Serial.println("delayBetweenStep_X:" + String(delayBetweenStep_X));
 
             item_is_selected = !item_is_selected;
           }
@@ -1298,8 +1077,7 @@ void loop() {
             isLCD = false;
         }
 
-        if (!isLCD)
-          return;
+        if (!isLCD) return;
 
         if (idx > pre_LCD_Page_index)
         {
