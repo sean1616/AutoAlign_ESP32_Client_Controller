@@ -31,7 +31,19 @@ int hallVal=1;
 String SSD, Msg;
 String contr_Name = "C001::";
 
-uint8_t CoreAddress[] = {0x90, 0x38, 0x0C, 0xEA, 0xD4, 0xC0};   //8C:4B:14:16:4C:F8
+// 90:38:0C:ED:82:28 == A06 Controller
+// C4:DE:E2:C0:A2:D8 == A05 Controller
+
+// 8C:4B:14:16:4C:F8 == A06 Core
+//C4:DE:E2:C0:A9:6C A09 core
+
+//C0:49:EF:46:2C:58  A08 Core
+//C0:49:EF:46:2C:74  A08 Controller
+
+//90:38:0C:ED:6D:64  A10 core
+
+// 90:38:0C:EA:D4:C0
+uint8_t CoreAddress[] = {0x90, 0x38, 0x0C, 0xED, 0x6D, 0x64};   //8C:4B:14:16:4C:F8
 // uint8_t broadcastAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x65, 0xFC}; 
 String ThisAddr = "";
 String Mac_Addr_Core = "";
@@ -349,26 +361,7 @@ void Draw_ALL_UI_Items(int LCD_Update_Mode, int pageIndex)
     for (i = 0; i < Addr_Page_ITEMS; i++)
     {
       lcd.drawStr(3, title_h + ((i + 1) * h) - 1, UI_Addr_Page_Items[i]);
-
-      //Item Content
-      // switch (i)
-      // {
-      // case 0:
-      //   lcd.drawStr(lcd.getWidth() - lcd.getStrWidth("0000") - 2, title_h + ((i + 1) * h) - 1, String(delayBetweenStep_X).c_str());
-      //   break;
-
-      // case 1:
-      //   lcd.drawStr(lcd.getWidth() - lcd.getStrWidth("0000") - 2, title_h + ((i + 1) * h) - 1, String(delayBetweenStep_Y).c_str());
-      //   break;
-
-      // case 2:
-      //   lcd.drawStr(lcd.getWidth() - lcd.getStrWidth("0000") - 2, title_h + ((i + 1) * h) - 1, String(delayBetweenStep_Z).c_str());
-      //   break;
-
-      // default:
-      //   break;
-      // }
-
+   
       lcd.drawFrame(0, (subpage_SelectedBox_Index)*h + 1 + title_h, w, h + 1); //Un-Selected Box
     }
   }
@@ -979,7 +972,7 @@ void setup() {
 
   // 绑定數據接收端
   esp_now_peer_info_t peerInfo;
-  memset(&peerInfo, 0, sizeof(peerInfo));  //initialize peer if esp32 library version is 2.0.1 (no need in version 1.0.6)
+  // memset(&peerInfo, 0, sizeof(peerInfo));  //initialize peer if esp32 library version is 2.0.1 (no need in version 1.0.6)
   memcpy(peerInfo.peer_addr, CoreAddress, 6); // Register peer
   peerInfo.channel = 0;
   peerInfo.encrypt = false;
@@ -1030,6 +1023,9 @@ void setup() {
   isLCD = false;
 }
 
+unsigned long previousMillis = 0;
+const long interval = 150; //default:2000
+
 void loop() {
  
   delay(20);  //default:20
@@ -1050,13 +1046,19 @@ void loop() {
   int cmd_No = Function_Classification("", ButtonSelected);
   cmd_No = Function_Excecutation("", cmd_No);
 
+  if (cmd_No > 100)
+    return;
+
   #pragma endregion
 
     // Serial.println("cmd_No: " + String(cmd_No));
+    unsigned long currentMillis = millis();
 
     //LCD UI Update
-    if (cmd_No < 0)
+    if (cmd_No < 0 && currentMillis - previousMillis >= interval)
     {
+      previousMillis = currentMillis;
+
       // LCD_Encoder_Rise();
 
       if (!digitalRead(LCD_Select_pin))
@@ -1132,12 +1134,12 @@ int KeyValueConverter()
     isKeyPressed = true;
     keyValueSum += 10;
   }
-  else if (!digitalRead(R_2))
+  if (!digitalRead(R_2))
   {
     isKeyPressed = true;
     keyValueSum += 5;
   }
-  else if (!digitalRead(R_3))
+  if (!digitalRead(R_3))
   {
     isKeyPressed = true;
     keyValueSum += 0;
@@ -1156,15 +1158,16 @@ int KeyValueConverter()
     delay(2);
 
     if (!digitalRead(C_1))
-    {
       keyValueSum += 1;
-    }
-    else if (!digitalRead(C_2))
+    if (!digitalRead(C_2))
       keyValueSum += 2;
-    else if (!digitalRead(C_3))
+    if (!digitalRead(C_3))
       keyValueSum += 3;
-    else
+
+    if(digitalRead(C_1) && digitalRead(C_2) && digitalRead(C_3))
       keyValueSum = 0;
+
+  // Serial.println("keyValueSum:" + String(keyValueSum));
 
     pinMode(R_1, INPUT_PULLUP);
     pinMode(R_2, INPUT_PULLUP);
@@ -1253,15 +1256,11 @@ int Function_Classification(String cmd, int ButtonSelected)
 
 int Function_Excecutation(String cmd, int cmd_No)
 {
-  //Function Execution
-   
   if(cmd_No >= 0)
   {
     if (cmd_No != 0)
     {
-      // Serial.println("CMD:" + String(cmd_No));
-
-      //Functions: Alignment
+      #pragma region  Functions: Alignment
       if (cmd_No <= 100)
       {        
         DataSent_Core("BS", String(cmd_No));
@@ -1269,20 +1268,30 @@ int Function_Excecutation(String cmd, int cmd_No)
         cmd_No = 0;
       }
 
+      #pragma endregion
 
-      //Functions: Motion
+      #pragma region  Functions: Motion
       if (cmd_No > 100)
         switch (cmd_No)
         {
           // Function: Cont-------------------------------------------------------------------------
-          //Z feed - cont
+          #pragma region  Z feed - cont
+
         case 101:
+
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
 
-            if (digitalRead(R_3))
+            int value = KeyValueConverter();
+
+            if(value != 101)
             {
+              DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
+
+              delay(50);
+
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
               break;
@@ -1291,15 +1300,24 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           cmd_No = 0;
           break;
+
         case 103:
+
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
-            if (digitalRead(R_3))
+
+            int value = KeyValueConverter();
+
+            if(value != 103)
             {
               DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
+              delay(50);
+
+              DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
               break;
             }    
             delay(50);  //Delay時間太短會導倒core收不到停止指令
@@ -1307,17 +1325,26 @@ int Function_Excecutation(String cmd, int cmd_No)
           cmd_No = 0;
           break;
 
-          //X feed - cont
+          #pragma endregion
+
+          #pragma region  X feed - continous
+
         case 102:
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
            
-          if (digitalRead(R_3))
-          {
-            DataSent_Core("SS", "");
+            int value = KeyValueConverter();
 
-              Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
+            if(value != 102)
+            {
+              DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
+
+              delay(50);
+
+              DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
               break;
             }    
@@ -1331,12 +1358,17 @@ int Function_Excecutation(String cmd, int cmd_No)
           {
             DataSent_Core("BS", String(cmd_No));
            
-            if (digitalRead(R_2))
+            int value = KeyValueConverter();
+
+            if(value != 105)
             {
               DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
+              delay(50);
 
+              DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
               break;
             }    
             delay(50);  //Delay時間太短會導倒core收不到停止指令
@@ -1345,16 +1377,26 @@ int Function_Excecutation(String cmd, int cmd_No)
           cmd_No = 0;
           break;
 
-          //Y- feed - cont
+          #pragma endregion
+
+          #pragma region  Y- feed - continous
+
         case 106:
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
-            if (digitalRead(R_2))
+
+            int value = KeyValueConverter();
+
+            if(value != 106)
             {
               DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
+              delay(50);
+
+              DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
               break;
             }    
@@ -1369,11 +1411,18 @@ int Function_Excecutation(String cmd, int cmd_No)
           while (true)
           {
             DataSent_Core("BS", String(cmd_No));
-            if (digitalRead(R_2))
+
+            int value = KeyValueConverter();
+
+            if(value != 104)
             {
               DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              Serial.println(sendmsg.contr_name + sendmsg.cmd + ":" + sendmsg.value);
+              delay(50);
+
+              DataSent_Core("SS", "");
+              Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
               break;
             }    
@@ -1381,7 +1430,11 @@ int Function_Excecutation(String cmd, int cmd_No)
           }
           cmd_No = 0;
           break;
+
+          #pragma endregion
         }
+
+        #pragma endregion
     }
     else
     {
@@ -1395,11 +1448,10 @@ int Function_Excecutation(String cmd, int cmd_No)
 
 void DataSent_Core(String CMD, String VALUE)
 {
-  Serial.printf("SendCMD:%s\n", CMD.c_str());
+  Serial.printf("SendCMD:%s, %s\n", CMD.c_str(), VALUE);
   CMD.toCharArray(sendmsg.cmd, 30);
   VALUE.toCharArray(sendmsg.value, 20);
   esp_err_t result = esp_now_send(CoreAddress, (uint8_t *) &sendmsg, sizeof(sendmsg));
-  // Serial.printf("SendResult:%d\r\n", result);
 }
 
 void DataReceive_Core()
