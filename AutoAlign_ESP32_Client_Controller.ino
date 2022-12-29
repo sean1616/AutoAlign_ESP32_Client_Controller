@@ -43,7 +43,7 @@ String contr_Name = "C001::";
 //90:38:0C:ED:6D:64  A10 core
 
 // 90:38:0C:EA:D4:C0
-uint8_t CoreAddress[] = {0x90, 0x38, 0x0C, 0xED, 0x6D, 0x64};   //8C:4B:14:16:4C:F8
+uint8_t CoreAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x4C, 0xF8};   //8C:4B:14:16:4C:F8
 // uint8_t broadcastAddress[] = {0x8C, 0x4B, 0x14, 0x16, 0x65, 0xFC}; 
 String ThisAddr = "";
 String Mac_Addr_Core = "";
@@ -1028,7 +1028,7 @@ const long interval = 150; //default:2000
 
 void loop() {
  
-  delay(20);  //default:20
+  delay(5);  //default:20
 
   // Serial.print("Test Address:  ");
   // for (size_t i = 0; i < sizeof(TestAddress); i++)
@@ -1118,6 +1118,7 @@ void EmergencyStop()
 
   Serial.println("EmergencyStop");
 
+  DataSent_Core("SS", "0");
   DataSent_Core("BS", "0");
 }
 
@@ -1290,7 +1291,7 @@ int Function_Excecutation(String cmd, int cmd_No)
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              delay(50);
+              delay(40);
 
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
@@ -1314,13 +1315,13 @@ int Function_Excecutation(String cmd, int cmd_No)
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              delay(50);
+              delay(40);
 
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
               break;
             }    
-            delay(50);  //Delay時間太短會導倒core收不到停止指令
+            delay(20);  //Delay時間太短會導倒core收不到停止指令
           }
           cmd_No = 0;
           break;
@@ -1341,14 +1342,14 @@ int Function_Excecutation(String cmd, int cmd_No)
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              delay(50);
+              delay(40);
 
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
               break;
             }    
-            delay(50);  //Delay時間太短會導倒core收不到停止指令
+            delay(20);  //Delay時間太短會導倒core收不到停止指令
           }
           cmd_No = 0;
           break;
@@ -1365,13 +1366,13 @@ int Function_Excecutation(String cmd, int cmd_No)
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              delay(50);
+              delay(40);
 
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
               break;
             }    
-            delay(50);  //Delay時間太短會導倒core收不到停止指令
+            delay(20);  //Delay時間太短會導倒core收不到停止指令
                 
           }
           cmd_No = 0;
@@ -1393,14 +1394,14 @@ int Function_Excecutation(String cmd, int cmd_No)
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              delay(50);
+              delay(40);
 
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
               break;
             }    
-            delay(50);  //Delay時間太短會導倒core收不到停止指令
+            delay(20);  //Delay時間太短會導倒core收不到停止指令
               
           }
           cmd_No = 0;
@@ -1419,14 +1420,14 @@ int Function_Excecutation(String cmd, int cmd_No)
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
-              delay(50);
+              delay(40);
 
               DataSent_Core("SS", "");
               Serial.println(sendmsg.contr_name + sendmsg.cmd + sendmsg.value);
 
               break;
             }    
-            delay(50);  //Delay時間太短會導倒core收不到停止指令
+            delay(20);  //Delay時間太短會導倒core收不到停止指令
           }
           cmd_No = 0;
           break;
